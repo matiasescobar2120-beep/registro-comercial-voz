@@ -1,0 +1,254 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <title>Registro Comercial por Voz</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #f2f6f3;
+      font-family: Arial, sans-serif;
+      color: #1f2937;
+    }
+
+    .contenedor {
+      max-width: 550px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .encabezado {
+      background: #153e2d;
+      color: white;
+      padding: 25px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1 { margin: 0 0 10px; }
+
+    .tarjeta {
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 8px #00000010;
+    }
+
+    button {
+      width: 100%;
+      padding: 17px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #microfono {
+      background: #18864b;
+      color: white;
+    }
+
+    #microfono.grabando {
+      background: #c0392b;
+    }
+
+    .secundario {
+      background: #e5e7eb;
+      color: #1f2937;
+      margin-top: 12px;
+    }
+
+    label {
+      display: block;
+      margin: 15px 0 6px;
+      font-weight: bold;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    textarea { min-height: 100px; }
+
+    #estado {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #166534;
+    }
+
+    .nota {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+<div class="contenedor">
+
+  <div class="encabezado">
+    <h1>Registro Comercial</h1>
+    <p>Registro inteligente de clientes por voz</p>
+  </div>
+
+  <div class="tarjeta">
+    <button id="microfono" onclick="dictar()">
+      🎙️ COMENZAR DICTADO
+    </button>
+
+    <p class="nota">
+      Dictá el nombre, teléfono, correo y producto
+      de interés en una sola frase.
+    </p>
+
+    <label for="texto">Texto reconocido</label>
+    <textarea id="texto"
+      placeholder="Tu dictado aparecerá aquí..."></textarea>
+
+    <button class="secundario" onclick="organizar()">
+      Organizar datos
+    </button>
+
+    <p id="estado"></p>
+  </div>
+
+  <div class="tarjeta">
+    <h3>Datos del cliente</h3>
+
+    <label>Nombre</label>
+    <input id="nombre">
+
+    <label>Apellido</label>
+    <input id="apellido">
+
+    <label>Teléfono</label>
+    <input id="telefono" type="tel">
+
+    <label>Correo electrónico</label>
+    <input id="email" type="email">
+
+    <label>Producto de interés</label>
+    <input id="producto">
+
+    <label>Observaciones</label>
+    <textarea id="observaciones"></textarea>
+
+    <p class="nota">
+      Versión de prueba: los datos todavía
+      no se envían a Google Sheets.
+    </p>
+  </div>
+
+</div>
+
+<script>
+  const Reconocimiento =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  let reconocimiento = null;
+  let escuchando = false;
+
+  const boton = document.getElementById("microfono");
+  const estado = document.getElementById("estado");
+
+  function dictar() {
+    if (!Reconocimiento) {
+      estado.textContent =
+        "Este navegador no admite reconocimiento de voz.";
+      return;
+    }
+
+    if (escuchando) {
+      reconocimiento.stop();
+      return;
+    }
+
+    reconocimiento = new Reconocimiento();
+    reconocimiento.lang = "es-AR";
+    reconocimiento.continuous = false;
+    reconocimiento.interimResults = true;
+
+    reconocimiento.onstart = () => {
+      escuchando = true;
+      boton.textContent = "🔴 DETENER DICTADO";
+      boton.classList.add("grabando");
+      estado.textContent = "Escuchando...";
+    };
+
+    reconocimiento.onresult = (evento) => {
+      let texto = "";
+
+      for (let i = 0; i < evento.results.length; i++) {
+        texto += evento.results[i][0].transcript;
+      }
+
+      document.getElementById("texto").value = texto;
+    };
+
+    reconocimiento.onerror = (evento) => {
+      estado.textContent =
+        "Error de reconocimiento: " + evento.error;
+    };
+
+    reconocimiento.onend = () => {
+      escuchando = false;
+      boton.textContent = "🎙️ COMENZAR DICTADO";
+      boton.classList.remove("grabando");
+    };
+
+    try {
+      reconocimiento.start();
+    } catch (error) {
+      estado.textContent = error.message;
+    }
+  }
+
+  function organizar() {
+    const texto =
+      document.getElementById("texto").value.trim();
+
+    if (!texto) {
+      estado.textContent =
+        "Primero dictá o escribí una frase.";
+      return;
+    }
+
+    // Detección preliminar de correo
+    const correo = texto.match(
+      /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i
+    );
+
+    if (correo) {
+      document.getElementById("email").value = correo[0];
+    }
+
+    // Detección preliminar de teléfono
+    const telefono = texto.match(
+      /(?:teléfono|telefono|celular)\s*:?\s*([\d\s()+-]{8,20})/i
+    );
+
+    if (telefono) {
+      document.getElementById("telefono").value =
+        telefono[1].trim();
+    }
+
+    estado.textContent =
+      "Prueba completada. Revisá los datos detectados.";
+  }
+</script>
+</body>
+</html>
