@@ -217,38 +217,129 @@
     }
   }
 
-  function organizar() {
-    const texto =
-      document.getElementById("texto").value.trim();
+  
+function organizar() {
+  const campo = id => document.getElementById(id);
+  const texto = campo("texto").value.trim();
 
-    if (!texto) {
-      estado.textContent =
-        "Primero dictá o escribí una frase.";
-      return;
-    }
-
-    // Detección preliminar de correo
-    const correo = texto.match(
-      /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i
-    );
-
-    if (correo) {
-      document.getElementById("email").value = correo[0];
-    }
-
-    // Detección preliminar de teléfono
-    const telefono = texto.match(
-      /(?:teléfono|telefono|celular)\s*:?\s*([\d\s()+-]{8,20})/i
-    );
-
-    if (telefono) {
-      document.getElementById("telefono").value =
-        telefono[1].trim();
-    }
-
-    estado.textContent =
-      "Prueba completada. Revisá los datos detectados.";
+  if (!texto) {
+    estado.textContent = "Primero dictá una frase.";
+    return;
   }
+
+  // Limpiar los campos antes de interpretar
+  ["nombre", "apellido", "telefono", "email",
+   "producto", "observaciones"].forEach(id => {
+    campo(id).value = "";
+  });
+
+  let frase = texto
+    .replace(/\s+/g, " ")
+    .replace(/[.;]+/g, ",")
+    .trim();
+
+  // Convertir expresiones dictadas de correo
+  frase = frase
+    .replace(/\s+arroba\s+/gi, "@")
+    .replace(/\s+punto\s+/gi, ".");
+
+  // Identificar correo electrónico
+  const correo = frase.match(
+    /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i
+  );
+
+  if (correo) {
+    campo("email").value = correo[0];
+    frase = frase.replace(correo[0], " ");
+  }
+
+  // Separar la frase en segmentos
+  const segmentos = frase.split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  let nombreCompleto = "";
+  let producto = "";
+  let observaciones = "";
+
+  const limpiarEtiqueta = (s, patron) =>
+    s.replace(patron, "").trim();
+
+  for (let segmento of segmentos) {
+
+    // Teléfono
+    if (/\b(tel[eé]fono|celular|m[oó]vil|whatsapp)\b/i
+        .test(segmento)) {
+
+      const numero = limpiarEtiqueta(
+        segmento,
+        /.*?\b(tel[eé]fono|celular|m[oó]vil|whatsapp)\b\s*:?\s*/i
+      );
+
+      const limpio = numero.replace(/[^\d+]/g, "");
+
+      if (limpio.replace(/\D/g, "").length >= 8) {
+        campo("telefono").value = limpio;
+      }
+      continue;
+    }
+
+    // Correo ya extraído
+    if (/^(correo|email|e-mail)\b/i.test(segmento)) {
+      continue;
+    }
+
+    // Producto
+    if (/\b(interesad[oa]\s+en|le\s+interesa|producto)\b/i
+        .test(segmento)) {
+
+      producto = limpiarEtiqueta(
+        segmento,
+        /.*?\b(interesad[oa]\s+en|le\s+interesa|producto)\b\s*:?\s*/i
+      );
+
+      continue;
+    }
+
+    // Observaciones
+    if (/\b(observaciones?|necesita|requiere|solicita)\b/i
+        .test(segmento)) {
+
+      observaciones = segmento;
+      continue;
+    }
+
+    // Nombre y apellido
+    if (!nombreCompleto) {
+      nombreCompleto = segmento.replace(
+        /^(nuevo\s+cliente|cliente|nombre)\s*:?\s*/i,
+        ""
+      ).trim();
+    } else {
+      observaciones +=
+        (observaciones ? ". " : "") + segmento;
+    }
+  }
+
+  // Separar nombre y apellido
+  const palabras = nombreCompleto.split(/\s+/)
+    .filter(Boolean);
+
+  if (palabras.length >= 2) {
+    campo("nombre").value = palabras[0];
+    campo("apellido").value =
+      palabras.slice(1).join(" ");
+  } else if (palabras.length === 1) {
+    campo("nombre").value = palabras[0];
+  }
+
+  campo("producto").value = producto;
+  campo("observaciones").value = observaciones;
+
+  estado.textContent =
+    "Datos organizados. Revisalos antes de guardar.";
+}
+
 </script>
 </body>
 </html>
