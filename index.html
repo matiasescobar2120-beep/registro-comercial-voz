@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -132,8 +131,7 @@ textarea { min-height: 100px; }
     <textarea id="observaciones"></textarea>
 
     <p class="nota">
-      Versión de prueba: todavía no se guardan
-      los datos en Google Sheets.
+      Los datos se guardan en Google Sheets al presionar Guardar cliente.
     </p>
   </div>
 </div>
@@ -586,8 +584,6 @@ if (!respuesta.ok) {
     (explicacion ? "\n" + explicacion : "")
   );
 }
-
-    }
 
     ultimoRegistroGuardado = firma;
     informarGoogle(
