@@ -551,16 +551,42 @@ async function guardarClienteGoogle() {
 
     const resultado = await respuesta.json();
 
-    if (!respuesta.ok) {
-      if (respuesta.status === 401) {
-        tokenGoogle = null;
-        venceToken = 0;
-      }
+    
+if (!respuesta.ok) {
+  if (respuesta.status === 401) {
+    tokenGoogle = null;
+    venceToken = 0;
+  }
 
-      throw new Error(
-        resultado.error?.message ||
-        "Error HTTP " + respuesta.status
-      );
+  const codigo = respuesta.status;
+  const mensaje = resultado.error?.message ||
+    "Error desconocido";
+
+  let explicacion = "";
+
+  if (codigo === 404) {
+    explicacion =
+      "No se encontró la planilla o la cuenta " +
+      "autorizada no tiene acceso a ella.";
+  } else if (codigo === 403) {
+    explicacion =
+      "La cuenta no tiene permisos suficientes " +
+      "o la API rechazó la operación.";
+  } else if (codigo === 401) {
+    explicacion =
+      "La autorización venció. Volvé a conectar Google.";
+  } else if (codigo === 400) {
+    explicacion =
+      "Revisá el nombre de la pestaña Clientes " +
+      "y el rango de escritura.";
+  }
+
+  throw new Error(
+    "HTTP " + codigo + ": " + mensaje +
+    (explicacion ? "\n" + explicacion : "")
+  );
+}
+
     }
 
     ultimoRegistroGuardado = firma;
