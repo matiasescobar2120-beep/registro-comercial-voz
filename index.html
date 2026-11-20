@@ -138,6 +138,8 @@ textarea { min-height: 100px; }
   </div>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <script>
 const $ = id => document.getElementById(id);
 const boton = $("microfono");
@@ -346,6 +348,243 @@ function organizar() {
   estado.textContent =
     "Datos interpretados. Revisalos antes de guardar.";
 }
+
+/* CONFIGURACIÓN DE GOOGLE SHEETS */
+
+const GOOGLE_CLIENT_ID =
+  "PEGAR_AQUI_TU_OAUTH_CLIENT_ID";
+
+const GOOGLE_SHEET_ID =
+  "PEGAR_AQUI_EL_ID_DE_TU_PLANILLA";
+
+const GOOGLE_SCOPE =
+  "https://www.googleapis.com/auth/spreadsheets";
+
+let tokenGoogle = null;
+let venceToken = 0;
+let clienteOAuth = null;
+let guardando = false;
+let ultimoRegistroGuardado = null;
+
+// Agregar botones sin modificar el formulario existente
+const panelGoogle = document.createElement("div");
+panelGoogle.className = "tarjeta";
+
+panelGoogle.innerHTML = `
+  <h3>Guardar en Google Sheets</h3>
+  <button id="conectarGoogle" type="button"
+    style="background:#e5e7eb;color:#1f2937">
+    Conectar con Google
+  </button>
+  <button id="guardarGoogle" type="button"
+    style="background:#18864b;color:white;margin-top:12px">
+    Guardar cliente
+  </button>
+  <p id="estadoGoogle" role="status"
+    style="font-size:14px;white-space:pre-wrap"></p>
+`;
+
+document.querySelector(".contenedor")
+  .appendChild(panelGoogle);
+
+const mensajeGoogle = document.getElementById("estadoGoogle");
+const botonGuardar = document.getElementById("guardarGoogle");
+
+function informarGoogle(mensaje) {
+  mensajeGoogle.textContent = mensaje;
+}
+
+function inicializarGoogle() {
+  if (!window.google?.accounts?.oauth2) {
+    informarGoogle(
+      "Google todavía está cargando. Intentá nuevamente."
+    );
+    return false;
+  }
+
+  if (!clienteOAuth) {
+    clienteOAuth = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_SCOPE,
+      callback: () => {}
+    });
+  }
+
+  return true;
+}
+
+function solicitarAcceso() {
+  return new Promise((resolve, reject) => {
+    if (!inicializarGoogle()) {
+      reject(new Error("No se cargó Google Identity Services."));
+      return;
+    }
+
+    clienteOAuth.callback = respuesta => {
+      if (respuesta.error || !respuesta.access_token) {
+        reject(new Error(
+          respuesta.error_description ||
+          respuesta.error ||
+          "No se recibió autorización."
+        ));
+        return;
+      }
+
+      tokenGoogle = respuesta.access_token;
+      venceToken = Date.now() +
+        (Number(respuesta.expires_in || 3600) - 60) * 1000;
+
+      informarGoogle("Cuenta de Google conectada.");
+      resolve(tokenGoogle);
+    };
+
+    clienteOAuth.error_callback = error => {
+      reject(new Error(
+        "No se completó la autorización: " +
+        (error.type || "error desconocido")
+      ));
+    };
+
+    clienteOAuth.requestAccessToken({
+      prompt: "select_account consent"
+    });
+  });
+}
+
+document.getElementById("conectarGoogle")
+  .addEventListener("click", async () => {
+    try {
+      await solicitarAcceso();
+    } catch (error) {
+      informarGoogle(error.message);
+    }
+  });
+
+function datosCliente() {
+  return {
+    nombre: $("nombre").value.trim(),
+    apellido: $("apellido").value.trim(),
+    telefono: $("telefono").value.trim(),
+    email: $("email").value.trim(),
+    producto: $("producto").value.trim(),
+    observaciones: $("observaciones").value.trim()
+  };
+}
+
+async function guardarClienteGoogle() {
+  if (guardando) return;
+
+  const datos = datosCliente();
+
+  if (!datos.nombre || !datos.producto) {
+    informarGoogle(
+      "Completá al menos el nombre y el producto."
+    );
+    return;
+  }
+
+  const firma = JSON.stringify(datos);
+
+  if (firma === ultimoRegistroGuardado) {
+    informarGoogle(
+      "Este registro ya fue guardado. " +
+      "Modificá los datos antes de volver a guardar."
+    );
+    return;
+  }
+
+  if (!tokenGoogle || Date.now() >= venceToken) {
+    informarGoogle(
+      "Primero presioná Conectar con Google."
+    );
+    return;
+  }
+
+  guardando = true;
+  botonGuardar.disabled = true;
+  informarGoogle("Guardando cliente...");
+
+  const fecha = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(new Date());
+
+  const id = crypto.randomUUID();
+
+  const fila = [
+    id,
+    fecha,
+    datos.nombre,
+    datos.apellido,
+    datos.telefono,
+    datos.email,
+    datos.producto,
+    datos.observaciones,
+    "Nuevo"
+  ];
+
+  const rango = encodeURIComponent("Clientes!A:I");
+  const url =
+    "https://sheets.googleapis.com/v4/spreadsheets/" +
+    encodeURIComponent(GOOGLE_SHEET_ID) +
+    "/values/" + rango +
+    ":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS";
+
+  try {
+    const respuesta = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + tokenGoogle,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        majorDimension: "ROWS",
+        values: [fila]
+      })
+    });
+
+    const resultado = await respuesta.json();
+
+    if (!respuesta.ok) {
+      if (respuesta.status === 401) {
+        tokenGoogle = null;
+        venceToken = 0;
+      }
+
+      throw new Error(
+        resultado.error?.message ||
+        "Error HTTP " + respuesta.status
+      );
+    }
+
+    ultimoRegistroGuardado = firma;
+    informarGoogle(
+      "Cliente guardado correctamente.\n" +
+      "ID: " + id
+    );
+
+  } catch (error) {
+    informarGoogle(
+      "No se pudo confirmar el guardado: " +
+      error.message +
+      ". Revisá la planilla antes de reintentar."
+    );
+  } finally {
+    guardando = false;
+    botonGuardar.disabled = false;
+  }
+}
+
+botonGuardar.addEventListener(
+  "click",
+  guardarClienteGoogle
+);
 </script>
 </body>
 </html>
