@@ -2,116 +2,101 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
-  <title>Registro Comercial por Voz</title>
-
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: #f2f6f3;
-      font-family: Arial, sans-serif;
-      color: #1f2937;
-    }
-
-    .contenedor {
-      max-width: 550px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    .encabezado {
-      background: #153e2d;
-      color: white;
-      padding: 25px;
-      border-radius: 16px;
-      margin-bottom: 20px;
-    }
-
-    h1 { margin: 0 0 10px; }
-
-    .tarjeta {
-      background: white;
-      padding: 20px;
-      border-radius: 15px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 8px #00000010;
-    }
-
-    button {
-      width: 100%;
-      padding: 17px;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    #microfono {
-      background: #18864b;
-      color: white;
-    }
-
-    #microfono.grabando {
-      background: #c0392b;
-    }
-
-    .secundario {
-      background: #e5e7eb;
-      color: #1f2937;
-      margin-top: 12px;
-    }
-
-    label {
-      display: block;
-      margin: 15px 0 6px;
-      font-weight: bold;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #cbd5e1;
-      border-radius: 9px;
-      font-size: 16px;
-    }
-
-    textarea { min-height: 100px; }
-
-    #estado {
-      margin-top: 12px;
-      font-size: 14px;
-      color: #166534;
-    }
-
-    .nota {
-      font-size: 13px;
-      color: #64748b;
-      line-height: 1.5;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro Comercial por Voz</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f2f6f3;
+  font-family: Arial, sans-serif;
+  color: #1f2937;
+}
+.contenedor {
+  max-width: 550px;
+  margin: auto;
+  padding: 20px;
+}
+.encabezado {
+  background: #153e2d;
+  color: white;
+  padding: 25px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+h1 { margin: 0 0 10px; }
+.tarjeta {
+  background: white;
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px #00000010;
+}
+button {
+  width: 100%;
+  padding: 17px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+#microfono {
+  background: #18864b;
+  color: white;
+  min-height: 85px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#microfono.grabando { background: #c0392b; }
+.secundario {
+  background: #e5e7eb;
+  color: #1f2937;
+  margin-top: 12px;
+}
+label {
+  display: block;
+  margin: 15px 0 6px;
+  font-weight: bold;
+}
+input, textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 16px;
+}
+textarea { min-height: 100px; }
+#estado {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #166534;
+}
+.nota {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+</style>
 </head>
-
 <body>
-<div class="contenedor">
 
+<div class="contenedor">
   <div class="encabezado">
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
   </div>
 
   <div class="tarjeta">
-    <button id="microfono" onclick="dictar()">
-      🎙️ COMENZAR DICTADO
+    <button id="microfono" type="button">
+      🎙️ MANTENER PRESIONADO PARA HABLAR
     </button>
 
     <p class="nota">
-      Dictá el nombre, teléfono, correo y producto
-      de interés en una sola frase.
+      Mantené presionado el botón mientras hablás.
+      No necesitás decir "coma".
     </p>
 
     <label for="texto">Texto reconocido</label>
@@ -147,199 +132,220 @@
     <textarea id="observaciones"></textarea>
 
     <p class="nota">
-      Versión de prueba: los datos todavía
-      no se envían a Google Sheets.
+      Versión de prueba: todavía no se guardan
+      los datos en Google Sheets.
     </p>
   </div>
-
 </div>
 
 <script>
-  const Reconocimiento =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+const $ = id => document.getElementById(id);
+const boton = $("microfono");
+const estado = $("estado");
 
-  let reconocimiento = null;
-  let escuchando = false;
+const Speech =
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
 
-  const boton = document.getElementById("microfono");
-  const estado = document.getElementById("estado");
+let reconocimiento = null;
+let presionado = false;
+let activo = false;
+let detenerAlIniciar = false;
+let textoFinal = "";
 
-  function dictar() {
-    if (!Reconocimiento) {
-      estado.textContent =
-        "Este navegador no admite reconocimiento de voz.";
-      return;
-    }
+function iniciarDictado(evento) {
+  if (evento.pointerType === "mouse" &&
+      evento.button !== 0) return;
 
-    if (escuchando) {
-      reconocimiento.stop();
-      return;
-    }
-
-    reconocimiento = new Reconocimiento();
-    reconocimiento.lang = "es-AR";
-    reconocimiento.continuous = false;
-    reconocimiento.interimResults = true;
-
-    reconocimiento.onstart = () => {
-      escuchando = true;
-      boton.textContent = "🔴 DETENER DICTADO";
-      boton.classList.add("grabando");
-      estado.textContent = "Escuchando...";
-    };
-
-    reconocimiento.onresult = (evento) => {
-      let texto = "";
-
-      for (let i = 0; i < evento.results.length; i++) {
-        texto += evento.results[i][0].transcript;
-      }
-
-      document.getElementById("texto").value = texto;
-    };
-
-    reconocimiento.onerror = (evento) => {
-      estado.textContent =
-        "Error de reconocimiento: " + evento.error;
-    };
-
-    reconocimiento.onend = () => {
-      escuchando = false;
-      boton.textContent = "🎙️ COMENZAR DICTADO";
-      boton.classList.remove("grabando");
-    };
-
-    try {
-      reconocimiento.start();
-    } catch (error) {
-      estado.textContent = error.message;
-    }
+  if (!Speech) {
+    estado.textContent =
+      "Este navegador no admite reconocimiento de voz.";
+    return;
   }
 
-  
-function organizar() {
-  const campo = id => document.getElementById(id);
-  const texto = campo("texto").value.trim();
+  if (presionado) return;
+  presionado = true;
+  detenerAlIniciar = false;
+  textoFinal = "";
 
-  if (!texto) {
+  boton.classList.add("grabando");
+  boton.textContent = "🔴 HABLANDO... SOLTÁ PARA TERMINAR";
+  estado.textContent = "Iniciando micrófono...";
+
+  try {
+    boton.setPointerCapture(evento.pointerId);
+  } catch (e) {}
+
+  reconocimiento = new Speech();
+  reconocimiento.lang = "es-AR";
+  reconocimiento.continuous = true;
+  reconocimiento.interimResults = true;
+
+  reconocimiento.onstart = () => {
+    activo = true;
+    estado.textContent = "Escuchando...";
+
+    if (!presionado || detenerAlIniciar) {
+      reconocimiento.stop();
+    }
+  };
+
+  reconocimiento.onresult = evento => {
+    let provisional = "";
+
+    for (let i = evento.resultIndex;
+         i < evento.results.length; i++) {
+      const resultado = evento.results[i];
+      if (resultado.isFinal) {
+        textoFinal += resultado[0].transcript + " ";
+      } else {
+        provisional += resultado[0].transcript;
+      }
+    }
+
+    $("texto").value =
+      (textoFinal + provisional).trim();
+  };
+
+  reconocimiento.onerror = evento => {
+    estado.textContent =
+      "Error de micrófono: " + evento.error;
+  };
+
+  reconocimiento.onend = () => {
+    activo = false;
+    presionado = false;
+    boton.classList.remove("grabando");
+    boton.textContent =
+      "🎙️ MANTENER PRESIONADO PARA HABLAR";
+
+    if (!estado.textContent.startsWith("Error")) {
+      estado.textContent =
+        "Dictado terminado. Podés organizar los datos.";
+    }
+  };
+
+  try {
+    reconocimiento.start();
+  } catch (e) {
+    presionado = false;
+    boton.classList.remove("grabando");
+    boton.textContent =
+      "🎙️ MANTENER PRESIONADO PARA HABLAR";
+    estado.textContent = e.message;
+  }
+}
+
+function terminarDictado() {
+  if (!presionado) return;
+
+  presionado = false;
+  detenerAlIniciar = true;
+
+  if (reconocimiento && activo) {
+    reconocimiento.stop();
+  }
+}
+
+boton.addEventListener("pointerdown", iniciarDictado);
+boton.addEventListener("pointerup", terminarDictado);
+boton.addEventListener("pointercancel", terminarDictado);
+boton.addEventListener("lostpointercapture", terminarDictado);
+
+function organizar() {
+  const original = $("texto").value.trim();
+
+  if (!original) {
     estado.textContent = "Primero dictá una frase.";
     return;
   }
 
-  // Limpiar los campos antes de interpretar
-  ["nombre", "apellido", "telefono", "email",
-   "producto", "observaciones"].forEach(id => {
-    campo(id).value = "";
-  });
+  const campos = [
+    "nombre", "apellido", "telefono",
+    "email", "producto", "observaciones"
+  ];
+  campos.forEach(id => $(id).value = "");
 
-  let frase = texto
+  let texto = original
     .replace(/\s+/g, " ")
-    .replace(/[.;]+/g, ",")
-    .trim();
-
-  // Convertir expresiones dictadas de correo
-  frase = frase
     .replace(/\s+arroba\s+/gi, "@")
     .replace(/\s+punto\s+/gi, ".");
 
-  // Identificar correo electrónico
-  const correo = frase.match(
+  // Correo electrónico
+  const correo = texto.match(
     /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i
   );
-
   if (correo) {
-    campo("email").value = correo[0];
-    frase = frase.replace(correo[0], " ");
+    $("email").value = correo[0];
+    texto = texto.replace(correo[0], " ");
   }
 
-  // Separar la frase en segmentos
-  const segmentos = frase.split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
+  // Palabras que delimitan los campos
+  const limite =
+    "(?=\\s+(?:tel[eé]fono|celular|whatsapp|" +
+    "correo|email|interesad[oa]s? en|" +
+    "le interesa|producto|necesita|requiere|" +
+    "solicita|observaciones?)\\b|$)";
 
-  let nombreCompleto = "";
-  let producto = "";
-  let observaciones = "";
+  // Teléfono
+  const tel = texto.match(
+    new RegExp(
+      "\\b(?:tel[eé]fono|celular|whatsapp)" +
+      "\\s*(?:es|n[uú]mero)?\\s*:?" +
+      "\\s*([\\d\\s()+-]{8,25})", "i"
+    )
+  );
 
-  const limpiarEtiqueta = (s, patron) =>
-    s.replace(patron, "").trim();
-
-  for (let segmento of segmentos) {
-
-    // Teléfono
-    if (/\b(tel[eé]fono|celular|m[oó]vil|whatsapp)\b/i
-        .test(segmento)) {
-
-      const numero = limpiarEtiqueta(
-        segmento,
-        /.*?\b(tel[eé]fono|celular|m[oó]vil|whatsapp)\b\s*:?\s*/i
-      );
-
-      const limpio = numero.replace(/[^\d+]/g, "");
-
-      if (limpio.replace(/\D/g, "").length >= 8) {
-        campo("telefono").value = limpio;
-      }
-      continue;
-    }
-
-    // Correo ya extraído
-    if (/^(correo|email|e-mail)\b/i.test(segmento)) {
-      continue;
-    }
-
-    // Producto
-    if (/\b(interesad[oa]\s+en|le\s+interesa|producto)\b/i
-        .test(segmento)) {
-
-      producto = limpiarEtiqueta(
-        segmento,
-        /.*?\b(interesad[oa]\s+en|le\s+interesa|producto)\b\s*:?\s*/i
-      );
-
-      continue;
-    }
-
-    // Observaciones
-    if (/\b(observaciones?|necesita|requiere|solicita)\b/i
-        .test(segmento)) {
-
-      observaciones = segmento;
-      continue;
-    }
-
-    // Nombre y apellido
-    if (!nombreCompleto) {
-      nombreCompleto = segmento.replace(
-        /^(nuevo\s+cliente|cliente|nombre)\s*:?\s*/i,
-        ""
-      ).trim();
-    } else {
-      observaciones +=
-        (observaciones ? ". " : "") + segmento;
-    }
+  if (tel) {
+    $("telefono").value =
+      tel[1].replace(/[^\d+]/g, "");
   }
 
-  // Separar nombre y apellido
-  const palabras = nombreCompleto.split(/\s+/)
-    .filter(Boolean);
+  // Producto
+  const producto = texto.match(
+    new RegExp(
+      "\\b(?:interesad[oa]s? en|le interesa|" +
+      "producto)\\s*:?(?:\\s+(?:un|una|el|la))?" +
+      "\\s+(.+?)" + limite, "i"
+    )
+  );
+
+  if (producto) {
+    $("producto").value = producto[1].trim();
+  }
+
+  // Observaciones
+  const obs = texto.match(
+    /\b(necesita|requiere|solicita|observaciones?)\b\s*:?\s*(.+)$/i
+  );
+
+  if (obs) {
+    $("observaciones").value =
+      obs[1].toLowerCase() === "observaciones"
+        ? obs[2].trim()
+        : (obs[1] + " " + obs[2]).trim();
+  }
+
+  // Nombre y apellido: antes del primer dato etiquetado
+  const nombre = texto.split(
+    /\b(?:tel[eé]fono|celular|whatsapp|correo|email|interesad[oa]s? en|le interesa|producto|necesita|requiere|solicita|observaciones?)\b/i
+  )[0]
+    .replace(/^(nuevo\s+cliente|cliente|nombre)\s*:?\s*/i, "")
+    .replace(/[,.;]+$/g, "")
+    .trim();
+
+  const palabras = nombre.split(/\s+/).filter(Boolean);
 
   if (palabras.length >= 2) {
-    campo("nombre").value = palabras[0];
-    campo("apellido").value =
-      palabras.slice(1).join(" ");
+    $("nombre").value = palabras[0];
+    $("apellido").value = palabras.slice(1).join(" ");
   } else if (palabras.length === 1) {
-    campo("nombre").value = palabras[0];
+    $("nombre").value = palabras[0];
   }
 
-  campo("producto").value = producto;
-  campo("observaciones").value = observaciones;
-
   estado.textContent =
-    "Datos organizados. Revisalos antes de guardar.";
+    "Datos interpretados. Revisalos antes de guardar.";
 }
-
 </script>
 </body>
 </html>
