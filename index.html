@@ -482,6 +482,7 @@ async function guardarClienteGoogle() {
   }
 
   const firma = JSON.stringify(datos);
+  const dictadoGuardado = $("texto").value;
 
   if (firma === ultimoRegistroGuardado) {
     informarGoogle(
@@ -586,6 +587,17 @@ if (!respuesta.ok) {
 }
 
     ultimoRegistroGuardado = firma;
+
+    // Limpiar únicamente si no se inició otro dictado ni se editaron datos.
+    if (!presionado && !activo &&
+        JSON.stringify(datosCliente()) === firma &&
+        $("texto").value === dictadoGuardado) {
+      ["texto", "nombre", "apellido", "telefono", "email",
+       "producto", "observaciones"].forEach(id => $(id).value = "");
+      textoFinal = "";
+      estado.textContent = "Listo para registrar otro cliente.";
+    }
+
     informarGoogle(
       "Cliente guardado correctamente.\n" +
       "ID: " + id
