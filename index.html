@@ -89,6 +89,7 @@ textarea { min-height: 100px; }
 #estadoGoogle[data-tipo="error"] { background: #fce8e6; color: #991b1b; border-color: #e8a09a; }
 input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
 #estadoGoogle { scroll-margin: 20px; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -97,7 +98,7 @@ input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
   <div class="encabezado">
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 2.3 — Validación y avisos</small>
+    <small>Versión 2.4 — Conexión optimizada</small>
   </div>
 
   <div class="tarjeta">
@@ -372,6 +373,9 @@ const GOOGLE_SCOPE =
 
 let tokenGoogle = null;
 let venceToken = 0;
+let conexionVencida = false;
+let conectando = false;
+let temporizadorGoogle = null;
 let clienteOAuth = null;
 let guardando = false;
 let ultimoRegistroGuardado = null;
@@ -382,10 +386,12 @@ panelGoogle.className = "tarjeta";
 
 panelGoogle.innerHTML = `
   <h3>Guardar en Google Sheets</h3>
+  <p id="conexionGoogle" role="status" style="font-weight:bold"></p>
   <button id="conectarGoogle" type="button"
     style="background:#e5e7eb;color:#1f2937">
     Conectar con Google
   </button>
+  <button id="desconectarGoogle" type="button" class="secundario" hidden>Desconectar</button>
   <button id="guardarGoogle" type="button"
     style="background:#18864b;color:white;margin-top:12px">
     Guardar cliente
@@ -399,6 +405,37 @@ document.querySelector(".contenedor")
 
 const mensajeGoogle = document.getElementById("estadoGoogle");
 const botonGuardar = document.getElementById("guardarGoogle");
+
+function actualizarConexion() {
+  if (tokenGoogle && Date.now() >= venceToken) {
+    tokenGoogle = null;
+    venceToken = 0;
+    conexionVencida = true;
+  }
+  const conectado = Boolean(tokenGoogle);
+  const indicador = $("conexionGoogle");
+  indicador.textContent = conectado ? "✓ Google conectado — autorización vigente" :
+    conexionVencida ? "⚠ La autorización venció" : "Google desconectado";
+  indicador.style.color = conectado ? "#166534" : conexionVencida ? "#92400e" : "#475569";
+  $("conectarGoogle").hidden = conectado;
+  $("conectarGoogle").disabled = conectando || guardando;
+  $("conectarGoogle").textContent = conectando ? "Conectando..." :
+    conexionVencida ? "Reconectar con Google" : "Conectar con Google";
+  $("desconectarGoogle").hidden = !conectado;
+  $("desconectarGoogle").disabled = guardando || conectando;
+}
+
+$("desconectarGoogle").addEventListener("click", () => {
+  if (guardando || conectando) return;
+  tokenGoogle = null;
+  venceToken = 0;
+  conexionVencida = false;
+  clearTimeout(temporizadorGoogle);
+  actualizarConexion();
+  informarGoogle("Google desconectado de esta sesión. Los datos ingresados se conservan.", "aviso");
+});
+document.addEventListener("visibilitychange", actualizarConexion);
+actualizarConexion();
 
 function informarGoogle(mensaje, tipo = "aviso") {
   const simbolos = { exito: "✓", proceso: "⏳", aviso: "⚠", error: "✕" };
@@ -447,6 +484,10 @@ function solicitarAcceso() {
       venceToken = Date.now() +
         (Number(respuesta.expires_in || 3600) - 60) * 1000;
 
+      conexionVencida = false;
+      clearTimeout(temporizadorGoogle);
+      temporizadorGoogle = setTimeout(actualizarConexion, Math.max(0, venceToken - Date.now()));
+      actualizarConexion();
       informarGoogle("Cuenta de Google conectada.", "exito");
       resolve(tokenGoogle);
     };
@@ -459,17 +500,24 @@ function solicitarAcceso() {
     };
 
     clienteOAuth.requestAccessToken({
-      prompt: "select_account consent"
+      prompt: ""
     });
   });
 }
 
 document.getElementById("conectarGoogle")
   .addEventListener("click", async () => {
+    actualizarConexion();
+    if (tokenGoogle || conectando || guardando) return;
+    conectando = true;
+    actualizarConexion();
     try {
       await solicitarAcceso();
     } catch (error) {
       informarGoogle(error.message, "error");
+    } finally {
+      conectando = false;
+      actualizarConexion();
     }
   });
 
@@ -523,14 +571,16 @@ async function guardarClienteGoogle() {
     return;
   }
 
+  actualizarConexion();
   if (!tokenGoogle || Date.now() >= venceToken) {
     informarGoogle(
-      "Primero presioná Conectar con Google."
+      conexionVencida ? "La autorización venció. Presioná Reconectar con Google." : "Primero presioná Conectar con Google."
     );
     return;
   }
 
   guardando = true;
+  actualizarConexion();
   botonGuardar.disabled = true;
   informarGoogle("Guardando cliente...\nEsperando confirmación de Google Sheets.", "proceso");
 
@@ -586,6 +636,8 @@ if (!respuesta.ok) {
   if (respuesta.status === 401) {
     tokenGoogle = null;
     venceToken = 0;
+    conexionVencida = true;
+    actualizarConexion();
   }
 
   const codigo = respuesta.status;
@@ -642,6 +694,7 @@ if (!respuesta.ok) {
     );
   } finally {
     guardando = false;
+    actualizarConexion();
     botonGuardar.disabled = false;
   }
 }
