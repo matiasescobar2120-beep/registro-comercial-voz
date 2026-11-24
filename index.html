@@ -87,6 +87,8 @@ textarea { min-height: 100px; }
 #estadoGoogle[data-tipo="proceso"] { background: #e8f0fe; color: #1e40af; border-color: #93b4ef; }
 #estadoGoogle[data-tipo="aviso"] { background: #fff7e0; color: #92400e; border-color: #e7c46a; }
 #estadoGoogle[data-tipo="error"] { background: #fce8e6; color: #991b1b; border-color: #e8a09a; }
+input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
+#estadoGoogle { scroll-margin: 20px; }
 </style>
 </head>
 <body>
@@ -95,6 +97,7 @@ textarea { min-height: 100px; }
   <div class="encabezado">
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
+    <small>Versión 2.3 — Validación y avisos</small>
   </div>
 
   <div class="tarjeta">
@@ -401,6 +404,7 @@ function informarGoogle(mensaje, tipo = "aviso") {
   const simbolos = { exito: "✓", proceso: "⏳", aviso: "⚠", error: "✕" };
   mensajeGoogle.dataset.tipo = tipo;
   mensajeGoogle.textContent = simbolos[tipo] + " " + mensaje;
+  mensajeGoogle.scrollIntoView({ block: "nearest", behavior: "auto" });
 }
 
 function inicializarGoogle() {
@@ -485,10 +489,26 @@ async function guardarClienteGoogle() {
 
   const datos = datosCliente();
 
-  if (!datos.nombre || !datos.producto) {
-    informarGoogle(
-      "Completá al menos el nombre y el producto."
-    );
+  const faltantes = [];
+  const invalidos = [];
+  for (const [campo, etiqueta] of [["nombre", "Nombre"], ["apellido", "Apellido"], ["producto", "Producto de interés"]]) {
+    if (!datos[campo]) { faltantes.push(etiqueta); invalidos.push(campo); }
+  }
+  if (!datos.telefono && !datos.email) {
+    faltantes.push("Teléfono o correo electrónico (al menos uno)");
+    invalidos.push("telefono", "email");
+  }
+  if (datos.telefono && (!/^\+?[\d\s().-]+$/.test(datos.telefono) || datos.telefono.replace(/\D/g, "").length < 8 || datos.telefono.replace(/\D/g, "").length > 15)) {
+    faltantes.push("Teléfono válido (8 a 15 dígitos)"); invalidos.push("telefono");
+  }
+  if (datos.email && !$('email').validity.valid) {
+    faltantes.push("Correo electrónico válido"); invalidos.push("email");
+  }
+  for (const campo of ["nombre", "apellido", "telefono", "email", "producto"]) {
+    $(campo).setAttribute("aria-invalid", String(invalidos.includes(campo)));
+  }
+  if (faltantes.length) {
+    informarGoogle("Revisá los siguientes datos:\n• " + faltantes.join("\n• "), "aviso");
     return;
   }
 
@@ -611,7 +631,7 @@ if (!respuesta.ok) {
 
     informarGoogle(
       "Cliente guardado correctamente.\n" +
-      "ID: " + id, "exito"
+      "ID: " + id + "\nRegistro enviado a Google Sheets.", "exito"
     );
 
   } catch (error) {
@@ -624,6 +644,10 @@ if (!respuesta.ok) {
     guardando = false;
     botonGuardar.disabled = false;
   }
+}
+
+for (const campo of ["nombre", "apellido", "telefono", "email", "producto"]) {
+  $(campo).addEventListener("input", () => $(campo).removeAttribute("aria-invalid"));
 }
 
 botonGuardar.addEventListener(
