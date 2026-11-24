@@ -98,7 +98,7 @@ input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
   <div class="encabezado">
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 2.4 — Conexión optimizada</small>
+    <small>Versión 2.5 — Prevención de duplicados</small>
   </div>
 
   <div class="tarjeta">
@@ -396,6 +396,12 @@ panelGoogle.innerHTML = `
     style="background:#18864b;color:white;margin-top:12px">
     Guardar cliente
   </button>
+  <div id="duplicadoGoogle" hidden style="margin-top:12px;background:#fff7e0;color:#92400e;padding:14px;border-radius:12px">
+    <strong>Cliente existente detectado</strong>
+    <p id="detalleDuplicado" style="white-space:pre-wrap"></p>
+    <button id="confirmarDuplicado" type="button" style="background:#18864b;color:white">Guardar como nueva consulta</button>
+    <button id="cancelarDuplicado" type="button" class="secundario">Cancelar guardado</button>
+  </div>
   <p id="estadoGoogle" role="status"
     style="font-size:14px;white-space:pre-wrap"></p>
 `;
@@ -521,6 +527,55 @@ document.getElementById("conectarGoogle")
     }
   });
 
+function normalizarTelefono(valor) {
+  return String(valor ?? "").replace(/\D/g, "");
+}
+function normalizarCorreo(valor) {
+  return String(valor ?? "").trim().toLowerCase();
+}
+async function buscarDuplicados(datos) {
+  const rango = encodeURIComponent("Clientes!C2:G");
+  const url = "https://sheets.googleapis.com/v4/spreadsheets/" +
+    encodeURIComponent(GOOGLE_SHEET_ID) + "/values/" + rango;
+  const respuesta = await fetch(url, {headers: {Authorization: "Bearer " + tokenGoogle}});
+  const resultado = await respuesta.json();
+  if (!respuesta.ok) {
+    if (respuesta.status === 401) {
+      tokenGoogle = null; venceToken = 0; conexionVencida = true; actualizarConexion();
+    }
+    throw new Error("No se pudo consultar duplicados (HTTP " + respuesta.status + "). " + (resultado.error?.message || ""));
+  }
+  const tel = normalizarTelefono(datos.telefono);
+  const correo = normalizarCorreo(datos.email);
+  return (resultado.values || []).map(fila => ({fila,
+    telefono: Boolean(tel && tel === normalizarTelefono(fila[2])),
+    correo: Boolean(correo && correo === normalizarCorreo(fila[3]))
+  })).filter(r => r.telefono || r.correo);
+}
+function confirmarCoincidencias(coincidencias) {
+  const panel = $("duplicadoGoogle");
+  $("detalleDuplicado").textContent = "Coincidencias encontradas: " + coincidencias.length + "\n\n" +
+    coincidencias.slice(0, 5).map(({fila, telefono, correo}) =>
+      "Coincide: " + [telefono ? "teléfono" : "", correo ? "correo" : ""].filter(Boolean).join(" y ") +
+      "\nCliente: " + [fila[0], fila[1]].filter(Boolean).join(" ") +
+      "\nTeléfono: " + (fila[2] || "—") + "\nCorreo: " + (fila[3] || "—") +
+      "\nProducto anterior: " + (fila[4] || "—")
+    ).join("\n\n") + (coincidencias.length > 5 ? "\n\nSe muestran las primeras 5 coincidencias." : "");
+  panel.hidden = false;
+  panel.scrollIntoView({block: "nearest"});
+  return new Promise(resolve => {
+    const terminar = decision => {
+      panel.hidden = true;
+      $("confirmarDuplicado").onclick = null;
+      $("cancelarDuplicado").onclick = null;
+      $("detalleDuplicado").textContent = "";
+      resolve(decision);
+    };
+    $("confirmarDuplicado").onclick = () => terminar(true);
+    $("cancelarDuplicado").onclick = () => terminar(false);
+  });
+}
+
 function datosCliente() {
   return {
     nombre: $("nombre").value.trim(),
@@ -563,14 +618,6 @@ async function guardarClienteGoogle() {
   const firma = JSON.stringify(datos);
   const dictadoGuardado = $("texto").value;
 
-  if (firma === ultimoRegistroGuardado) {
-    informarGoogle(
-      "Este registro ya fue guardado. " +
-      "Modificá los datos antes de volver a guardar."
-    );
-    return;
-  }
-
   actualizarConexion();
   if (!tokenGoogle || Date.now() >= venceToken) {
     informarGoogle(
@@ -582,7 +629,7 @@ async function guardarClienteGoogle() {
   guardando = true;
   actualizarConexion();
   botonGuardar.disabled = true;
-  informarGoogle("Guardando cliente...\nEsperando confirmación de Google Sheets.", "proceso");
+  informarGoogle("Consultando clientes existentes...", "proceso");
 
   const fecha = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -617,6 +664,24 @@ async function guardarClienteGoogle() {
     ":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS";
 
   try {
+    const coincidencias = await buscarDuplicados(datos);
+    if (coincidencias.length) {
+      informarGoogle("Cliente existente. Confirmá o cancelá la nueva consulta.", "aviso");
+      if (!(await confirmarCoincidencias(coincidencias))) {
+        informarGoogle("Guardado cancelado. Los datos se conservan.", "aviso");
+        return;
+      }
+    }
+    if (JSON.stringify(datosCliente()) !== firma || $("texto").value !== dictadoGuardado || presionado || activo) {
+      informarGoogle("Los datos cambiaron durante la consulta. Revisalos y volvé a guardar.", "aviso");
+      return;
+    }
+    actualizarConexion();
+    if (!tokenGoogle) {
+      informarGoogle("La autorización venció. Reconectá Google y volvé a guardar.", "aviso");
+      return;
+    }
+    informarGoogle("Guardando cliente...\nEsperando confirmación de Google Sheets.", "proceso");
     const respuesta = await fetch(url, {
       method: "POST",
       headers: {
