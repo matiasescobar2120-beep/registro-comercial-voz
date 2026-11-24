@@ -78,6 +78,15 @@ textarea { min-height: 100px; }
   color: #64748b;
   line-height: 1.5;
 }
+#estadoGoogle:empty { display: none; }
+#estadoGoogle:not(:empty) {
+  display: block; padding: 14px; border-radius: 10px;
+  border: 1px solid; line-height: 1.5; overflow-wrap: anywhere;
+}
+#estadoGoogle[data-tipo="exito"] { background: #e8f5e9; color: #166534; border-color: #86c99a; }
+#estadoGoogle[data-tipo="proceso"] { background: #e8f0fe; color: #1e40af; border-color: #93b4ef; }
+#estadoGoogle[data-tipo="aviso"] { background: #fff7e0; color: #92400e; border-color: #e7c46a; }
+#estadoGoogle[data-tipo="error"] { background: #fce8e6; color: #991b1b; border-color: #e8a09a; }
 </style>
 </head>
 <body>
@@ -388,8 +397,10 @@ document.querySelector(".contenedor")
 const mensajeGoogle = document.getElementById("estadoGoogle");
 const botonGuardar = document.getElementById("guardarGoogle");
 
-function informarGoogle(mensaje) {
-  mensajeGoogle.textContent = mensaje;
+function informarGoogle(mensaje, tipo = "aviso") {
+  const simbolos = { exito: "✓", proceso: "⏳", aviso: "⚠", error: "✕" };
+  mensajeGoogle.dataset.tipo = tipo;
+  mensajeGoogle.textContent = simbolos[tipo] + " " + mensaje;
 }
 
 function inicializarGoogle() {
@@ -432,7 +443,7 @@ function solicitarAcceso() {
       venceToken = Date.now() +
         (Number(respuesta.expires_in || 3600) - 60) * 1000;
 
-      informarGoogle("Cuenta de Google conectada.");
+      informarGoogle("Cuenta de Google conectada.", "exito");
       resolve(tokenGoogle);
     };
 
@@ -454,7 +465,7 @@ document.getElementById("conectarGoogle")
     try {
       await solicitarAcceso();
     } catch (error) {
-      informarGoogle(error.message);
+      informarGoogle(error.message, "error");
     }
   });
 
@@ -501,7 +512,7 @@ async function guardarClienteGoogle() {
 
   guardando = true;
   botonGuardar.disabled = true;
-  informarGoogle("Guardando cliente...");
+  informarGoogle("Guardando cliente...\nEsperando confirmación de Google Sheets.", "proceso");
 
   const fecha = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -600,14 +611,14 @@ if (!respuesta.ok) {
 
     informarGoogle(
       "Cliente guardado correctamente.\n" +
-      "ID: " + id
+      "ID: " + id, "exito"
     );
 
   } catch (error) {
     informarGoogle(
       "No se pudo confirmar el guardado: " +
       error.message +
-      ". Revisá la planilla antes de reintentar."
+      ". Revisá la planilla antes de reintentar.", "error"
     );
   } finally {
     guardando = false;
