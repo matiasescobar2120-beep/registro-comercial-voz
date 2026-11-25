@@ -1,0 +1,111 @@
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f2f6f3;
+  font-family: Arial, sans-serif;
+  color: #1f2937;
+}
+.contenedor {
+  max-width: 550px;
+  margin: auto;
+  padding: 20px;
+}
+.encabezado {
+  background: #153e2d;
+  color: white;
+  padding: 25px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+h1 { margin: 0 0 10px; }
+.tarjeta {
+  background: white;
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px #00000010;
+}
+button {
+  width: 100%;
+  padding: 17px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+#microfono {
+  background: #18864b;
+  color: white;
+  min-height: 85px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#microfono.grabando { background: #c0392b; }
+.secundario {
+  background: #e5e7eb;
+  color: #1f2937;
+  margin-top: 12px;
+}
+label {
+  display: block;
+  margin: 15px 0 6px;
+  font-weight: bold;
+}
+input, textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 16px;
+}
+textarea { min-height: 100px; }
+#estado {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #166534;
+}
+.nota {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+#estadoGoogle:empty { display: none; }
+#estadoGoogle:not(:empty) {
+  display: block; padding: 14px; border-radius: 10px;
+  border: 1px solid; line-height: 1.5; overflow-wrap: anywhere;
+}
+#estadoGoogle[data-tipo="exito"] { background: #e8f5e9; color: #166534; border-color: #86c99a; }
+#estadoGoogle[data-tipo="proceso"] { background: #e8f0fe; color: #1e40af; border-color: #93b4ef; }
+#estadoGoogle[data-tipo="aviso"] { background: #fff7e0; color: #92400e; border-color: #e7c46a; }
+#estadoGoogle[data-tipo="error"] { background: #fce8e6; color: #991b1b; border-color: #e8a09a; }
+input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
+#estadoGoogle { scroll-margin: 20px; }
+[hidden] { display: none !important; }
+
+:root {color-scheme:light;--bg:#fff;--surface:#fff;--ink:#111d3d;--muted:#536582;--line:#d6e0f1;--soft:#edf3ff;--accent:#294ba3;--ok:#166534;--warn:#92400e;--shadow:#142b6410}
+:root[data-tema="oscuro"] {color-scheme:dark;--bg:#060e2a;--surface:#101d3b;--ink:#f2f6ff;--muted:#b4c5e4;--line:#34486b;--soft:#1b2c50;--accent:#a8caff;--ok:#9be8ae;--warn:#ffcf81;--shadow:#0003}
+body {background:var(--bg);color:var(--ink);font-family:system-ui,Arial,sans-serif}
+.contenedor {max-width:600px;padding:16px}
+.encabezado {background:#050e32;padding:22px;color:#fff;box-shadow:0 8px 24px #07133822}
+.marca {display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
+.marca img {width:180px;max-width:60%;height:auto;display:block}
+#tema {width:auto;padding:10px 12px;background:#23365d;color:#fff;font-size:13px;border:1px solid #7189bb}
+h1 {font-size:25px;letter-spacing:-.5px}.encabezado p {margin:6px 0;color:#c9d8f5}.encabezado small {color:#a8bde4}
+.tarjeta {background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 18px var(--shadow);padding:20px}
+h3 {color:var(--accent);margin:0 0 14px;font-size:17px}
+#microfono,#guardarGoogle,#confirmarDuplicado {background:linear-gradient(125deg,#213d86,#4665bf)!important;color:white!important}
+#microfono.grabando {background:#b42335!important}
+#microfono {min-height:100px;letter-spacing:.3px}
+.secundario,#conectarGoogle {background:var(--soft)!important;color:var(--accent)!important;border:1px solid var(--line)}
+input,textarea {background:var(--surface);color:var(--ink);border-color:var(--line);font-family:inherit}
+#texto {background:var(--soft);border-color:var(--line)}
+label {color:var(--accent);font-size:14px}.nota {color:var(--muted)}
+#estado {color:var(--accent)}
+#conexionGoogle[data-conexion="ok"] {color:var(--ok)!important}#conexionGoogle[data-conexion="aviso"] {color:var(--warn)!important}#conexionGoogle[data-conexion="no"] {color:var(--muted)!important}
+#duplicadoGoogle .secundario {background:#fff!important;color:#92400e!important}
+input[aria-invalid="true"] {color:#713f12}
+button:disabled {opacity:.55;cursor:not-allowed}button:focus-visible,input:focus-visible,textarea:focus-visible {outline:3px solid #7899ef;outline-offset:2px}
+.pie {text-align:center;color:var(--muted);font-size:12px;padding:10px}

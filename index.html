@@ -3,105 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Registro Comercial por Voz</title>
-<style>
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  background: #f2f6f3;
-  font-family: Arial, sans-serif;
-  color: #1f2937;
-}
-.contenedor {
-  max-width: 550px;
-  margin: auto;
-  padding: 20px;
-}
-.encabezado {
-  background: #153e2d;
-  color: white;
-  padding: 25px;
-  border-radius: 16px;
-  margin-bottom: 20px;
-}
-h1 { margin: 0 0 10px; }
-.tarjeta {
-  background: white;
-  padding: 20px;
-  border-radius: 15px;
-  margin-bottom: 15px;
-  box-shadow: 0 2px 8px #00000010;
-}
-button {
-  width: 100%;
-  padding: 17px;
-  border: 0;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
-#microfono {
-  background: #18864b;
-  color: white;
-  min-height: 85px;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-#microfono.grabando { background: #c0392b; }
-.secundario {
-  background: #e5e7eb;
-  color: #1f2937;
-  margin-top: 12px;
-}
-label {
-  display: block;
-  margin: 15px 0 6px;
-  font-weight: bold;
-}
-input, textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  font-size: 16px;
-}
-textarea { min-height: 100px; }
-#estado {
-  margin-top: 12px;
-  font-size: 14px;
-  color: #166534;
-}
-.nota {
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-}
-#estadoGoogle:empty { display: none; }
-#estadoGoogle:not(:empty) {
-  display: block; padding: 14px; border-radius: 10px;
-  border: 1px solid; line-height: 1.5; overflow-wrap: anywhere;
-}
-#estadoGoogle[data-tipo="exito"] { background: #e8f5e9; color: #166534; border-color: #86c99a; }
-#estadoGoogle[data-tipo="proceso"] { background: #e8f0fe; color: #1e40af; border-color: #93b4ef; }
-#estadoGoogle[data-tipo="aviso"] { background: #fff7e0; color: #92400e; border-color: #e7c46a; }
-#estadoGoogle[data-tipo="error"] { background: #fce8e6; color: #991b1b; border-color: #e8a09a; }
-input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
-#estadoGoogle { scroll-margin: 20px; }
-[hidden] { display: none !important; }
-</style>
+<title>ALIADO’S | Registro Comercial</title>
+<link rel="stylesheet" href="estilos.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050e32">
+<script>try {document.documentElement.dataset.tema=localStorage.getItem("aliados-tema")==="oscuro"?"oscuro":"claro";} catch(e) {}</script>
 </head>
 <body>
 
 <div class="contenedor">
   <div class="encabezado">
+    <div class="marca"><img src="logo-aliados.png" alt="ALIADO’S — Simplificamos tu negocio"><button id="tema" type="button" aria-pressed="false">Modo oscuro</button></div>
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 2.5 — Prevención de duplicados</small>
+    <small>Versión 3.0 · Registro por voz</small>
   </div>
 
   <div class="tarjeta">
+    <h3>01 · Micrófono y transcripción</h3>
     <button id="microfono" type="button">
       🎙️ MANTENER PRESIONADO PARA HABLAR
     </button>
@@ -111,7 +30,7 @@ input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
       No necesitás decir "coma".
     </p>
 
-    <label for="texto">Texto reconocido</label>
+    <label for="texto">Transcripción de voz</label>
     <textarea id="texto"
       placeholder="Tu dictado aparecerá aquí..."></textarea>
 
@@ -123,7 +42,7 @@ input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
   </div>
 
   <div class="tarjeta">
-    <h3>Datos del cliente</h3>
+    <h3>02 · Datos del cliente</h3>
 
     <label>Nombre</label>
     <input id="nombre">
@@ -153,6 +72,15 @@ input[aria-invalid="true"] { border: 2px solid #b45309; background: #fff7e0; }
 
 <script>
 const $ = id => document.getElementById(id);
+const selectorTema = $("tema");
+function aplicarTema(tema) {
+  document.documentElement.dataset.tema = tema;
+  selectorTema.textContent = tema === "oscuro" ? "☀ Modo claro" : "☾ Modo oscuro";
+  selectorTema.setAttribute("aria-pressed", String(tema === "oscuro"));
+  try { localStorage.setItem("aliados-tema", tema); } catch(e) {}
+}
+aplicarTema(document.documentElement.dataset.tema || "claro");
+selectorTema.addEventListener("click", () => aplicarTema(document.documentElement.dataset.tema === "oscuro" ? "claro" : "oscuro"));
 const boton = $("microfono");
 const estado = $("estado");
 
@@ -385,7 +313,7 @@ const panelGoogle = document.createElement("div");
 panelGoogle.className = "tarjeta";
 
 panelGoogle.innerHTML = `
-  <h3>Guardar en Google Sheets</h3>
+  <h3>03 · Guardar cliente</h3>
   <p id="conexionGoogle" role="status" style="font-weight:bold"></p>
   <button id="conectarGoogle" type="button"
     style="background:#e5e7eb;color:#1f2937">
@@ -422,7 +350,7 @@ function actualizarConexion() {
   const indicador = $("conexionGoogle");
   indicador.textContent = conectado ? "✓ Google conectado — autorización vigente" :
     conexionVencida ? "⚠ La autorización venció" : "Google desconectado";
-  indicador.style.color = conectado ? "#166534" : conexionVencida ? "#92400e" : "#475569";
+  indicador.dataset.conexion = conectado ? "ok" : conexionVencida ? "aviso" : "no";
   $("conectarGoogle").hidden = conectado;
   $("conectarGoogle").disabled = conectando || guardando;
   $("conectarGoogle").textContent = conectando ? "Conectando..." :
@@ -773,5 +701,6 @@ botonGuardar.addEventListener(
   guardarClienteGoogle
 );
 </script>
+<footer class="pie">ALIADO’S · Simplificamos tu negocio</footer>
 </body>
 </html>
