@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ALIADO’S | Registro Comercial</title>
-<link rel="stylesheet" href="estilos.css">
+<link rel="stylesheet" href="estilos.css?v=3.1">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#050e32">
 <script>try {document.documentElement.dataset.tema=localStorage.getItem("aliados-tema")==="oscuro"?"oscuro":"claro";} catch(e) {}</script>
@@ -16,9 +16,22 @@
     <div class="marca"><img src="logo-aliados.png" alt="ALIADO’S — Simplificamos tu negocio"><button id="tema" type="button" aria-pressed="false">Modo oscuro</button></div>
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 3.0 · Registro por voz</small>
+    <small>Versión 3.1 · Registro por voz</small>
   </div>
 
+  <nav class="navHistorial" aria-label="Secciones">
+    <button id="navNuevo" type="button" aria-pressed="true">Nuevo registro</button>
+    <button id="navHistorial" type="button" aria-pressed="false">Historial</button>
+  </nav>
+  <section id="historial" class="tarjeta" hidden>
+    <h3>Historial de clientes</h3>
+    <button id="conectarHistorial" class="secundario" type="button">Conectar con Google</button>
+    <button id="actualizarHistorial" class="secundario" type="button">Actualizar historial</button>
+    <p id="estadoHistorial" role="status"></p>
+    <p id="contadorHistorial" class="nota"></p>
+    <div id="listaHistorial"></div>
+    <button id="masHistorial" class="secundario" type="button" hidden>Cargar 20 más</button>
+  </section>
   <div class="tarjeta">
     <h3>01 · Micrófono y transcripción</h3>
     <button id="microfono" type="button">
@@ -357,6 +370,7 @@ function actualizarConexion() {
     conexionVencida ? "Reconectar con Google" : "Conectar con Google";
   $("desconectarGoogle").hidden = !conectado;
   $("desconectarGoogle").disabled = guardando || conectando;
+  if (typeof sincronizarHistorial === "function" && $("historial").dataset.listo) sincronizarHistorial();
 }
 
 $("desconectarGoogle").addEventListener("click", () => {
@@ -700,6 +714,100 @@ botonGuardar.addEventListener(
   "click",
   guardarClienteGoogle
 );
+const historial = $("historial");
+let filasHistorial = [], limiteHistorial = 20, solicitudHistorial = 0;
+let vistaHistorial = false;
+function limpiarHistorial() {
+  solicitudHistorial++;
+  filasHistorial = [];
+  $("listaHistorial").replaceChildren();
+  $("masHistorial").hidden = true;
+  $("contadorHistorial").textContent = "";
+  $("actualizarHistorial").disabled = false;
+}
+function sincronizarHistorial() {
+  if (!tokenGoogle) {
+    limpiarHistorial();
+    $("estadoHistorial").textContent = "Conectá Google para consultar el historial.";
+  }
+  $("conectarHistorial").hidden = Boolean(tokenGoogle);
+  $("conectarHistorial").disabled = conectando || guardando;
+}
+function mostrarVista(ver) {
+  if (guardando || conectando || presionado || activo) return;
+  vistaHistorial = ver;
+  document.querySelectorAll(".contenedor > .tarjeta:not(#historial)").forEach(el => el.hidden = ver);
+  historial.hidden = !ver;
+  $("navNuevo").setAttribute("aria-pressed", String(!ver));
+  $("navHistorial").setAttribute("aria-pressed", String(ver));
+  if (ver) cargarHistorial(); else limpiarHistorial();
+}
+function renderHistorial() {
+  const lista = $("listaHistorial");
+  lista.replaceChildren();
+  const visibles = filasHistorial.slice(0, limiteHistorial);
+  $("contadorHistorial").textContent = `${visibles.length} de ${filasHistorial.length} registros`;
+  for (const fila of visibles) {
+    const tarjeta = document.createElement("details");
+    tarjeta.className = "registroHistorial";
+    const resumen = document.createElement("summary");
+    const nombre = document.createElement("strong");
+    nombre.textContent = [fila[2], fila[3]].filter(Boolean).join(" ") || "Sin nombre";
+    resumen.append(nombre);
+    for (const valor of [fila[5] ? fila[4] || fila[5] : fila[4], fila[6], fila[1], fila[8]]) {
+      if (!valor) continue;
+      const linea = document.createElement("span"); linea.textContent = valor; resumen.append(linea);
+    }
+    tarjeta.append(resumen);
+    const detalle = document.createElement("dl");
+    ["ID", "Fecha y hora", "Nombre", "Apellido", "Teléfono", "Correo electrónico", "Producto de interés", "Observaciones", "Estado"].forEach((etiqueta,i) => {
+      const dt = document.createElement("dt"), dd = document.createElement("dd");
+      dt.textContent = etiqueta; dd.textContent = fila[i] || "—"; detalle.append(dt,dd);
+    });
+    tarjeta.append(detalle); lista.append(tarjeta);
+  }
+  $("masHistorial").hidden = visibles.length >= filasHistorial.length;
+}
+async function cargarHistorial() {
+  actualizarConexion();
+  limpiarHistorial();
+  limiteHistorial = 20;
+  if (!tokenGoogle) return;
+  const token = tokenGoogle, solicitud = solicitudHistorial;
+  $("actualizarHistorial").disabled = true;
+  $("estadoHistorial").textContent = "Cargando registros…";
+  try {
+    const url = "https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(GOOGLE_SHEET_ID) + "/values/" + encodeURIComponent("Clientes!A2:I");
+    const respuesta = await fetch(url, {headers:{Authorization:"Bearer " + token}, cache:"no-store"});
+    if (solicitud !== solicitudHistorial || token !== tokenGoogle || !vistaHistorial) return;
+    if (respuesta.status === 401) {tokenGoogle = null; venceToken = 0; conexionVencida = true; actualizarConexion(); return;}
+    if (!respuesta.ok) throw new Error("Google Sheets respondió HTTP " + respuesta.status);
+    const resultado = await respuesta.json();
+    if (solicitud !== solicitudHistorial || token !== tokenGoogle || !vistaHistorial) return;
+    filasHistorial = (resultado.values || []).filter(f => f.some(v => String(v).trim())).reverse();
+    filasHistorial.sort((a,b) => String(b[1] || "").localeCompare(String(a[1] || "")));
+    renderHistorial();
+    $("estadoHistorial").textContent = filasHistorial.length ? "Seleccioná un registro para ver sus datos." : "Todavía no hay registros.";
+  } catch(error) {
+    if (solicitud === solicitudHistorial) $("estadoHistorial").textContent = "No se pudo cargar el historial. " + error.message;
+  } finally {
+    if (solicitud === solicitudHistorial) $("actualizarHistorial").disabled = false;
+  }
+}
+$("navNuevo").addEventListener("click", () => mostrarVista(false));
+$("navHistorial").addEventListener("click", () => mostrarVista(true));
+$("actualizarHistorial").addEventListener("click", cargarHistorial);
+$("masHistorial").addEventListener("click", () => { actualizarConexion(); if (tokenGoogle) {limiteHistorial += 20; renderHistorial();} });
+$("conectarHistorial").addEventListener("click", async () => {
+  if (conectando || guardando) return;
+  conectando = true; actualizarConexion();
+  try {await solicitarAcceso(); await cargarHistorial();}
+  catch(error) {$("estadoHistorial").textContent = error.message;}
+  finally {conectando = false; actualizarConexion();}
+});
+sincronizarHistorial();
+
+$("historial").dataset.listo = "1";
 </script>
 <footer class="pie">ALIADO’S · Simplificamos tu negocio</footer>
 </body>
