@@ -120,3 +120,10 @@ button:disabled {opacity:.55;cursor:not-allowed}button:focus-visible,input:focus
 .registroHistorial dl {border-top:1px solid var(--line);padding-top:12px;margin-bottom:0}
 .registroHistorial dt {font-size:12px;color:var(--muted);font-weight:bold}
 .registroHistorial dd {margin:4px 0 12px;white-space:pre-wrap}
+
+/* V3.2 — Buscador de clientes */
+#panelBusqueda {margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+#panelBusqueda label {margin:0 0 8px}
+.filaBusqueda {display:flex;align-items:center;gap:8px}
+.filaBusqueda input {flex:1;min-width:0}
+.filaBusqueda button {width:auto;margin:0;padding:12px;font-size:14px}
