@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ALIADO’S | Registro Comercial</title>
-<link rel="stylesheet" href="estilos.css?v=3.2">
+<link rel="stylesheet" href="estilos.css?v=3.3">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#050e32">
 <script>try {document.documentElement.dataset.tema=localStorage.getItem("aliados-tema")==="oscuro"?"oscuro":"claro";} catch(e) {}</script>
@@ -16,7 +16,7 @@
     <div class="marca"><img src="logo-aliados.png" alt="ALIADO’S — Simplificamos tu negocio"><button id="tema" type="button" aria-pressed="false">Modo oscuro</button></div>
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 3.2 · Registro por voz</small>
+    <small>Versión 3.3 · Registro por voz</small>
   </div>
 
   <nav class="navHistorial" aria-label="Secciones">
@@ -722,9 +722,68 @@ botonGuardar.addEventListener(
   guardarClienteGoogle
 );
 const historial = $("historial");
+let editorActivo = null, editandoGuardado = false;
+function cerrarEdicion() { if(editorActivo) {editorActivo.remove(); editorActivo = null;} }
+const camposEdicion = [["Nombre","text"],["Apellido","text"],["Teléfono","tel"],["Correo electrónico","email"],["Producto de interés","text"],["Observaciones","textarea"]];
+const firmaFila = fila => JSON.stringify(Array.from({length:9}, (_,i)=>String(fila[i] ?? "")));
+function abrirEdicion(fila, tarjeta) {
+  if(editandoGuardado) return;
+  actualizarConexion(); if(!tokenGoogle || !tarjeta.isConnected) return;
+  cerrarEdicion();
+  const form = document.createElement("form"); form.className = "editorRegistro"; editorActivo = form;
+  const titulo = document.createElement("h3"); titulo.textContent = "Editar registro"; form.append(titulo);
+  const inputs = camposEdicion.map(([nombre,tipo],i)=>{
+    const label = document.createElement("label"); label.textContent = nombre;
+    const input = document.createElement(tipo === "textarea" ? "textarea" : "input");
+    if(tipo !== "textarea") input.type = tipo;
+    input.value = fila[i+2] ?? ""; input.required = [0,1,4].includes(i); label.append(input); form.append(label); return input;
+  });
+  const aviso = document.createElement("p"); aviso.className = "avisoEdicion"; aviso.setAttribute("role","status"); aviso.textContent = "Se actualizará el registro existente, sin crear una fila nueva."; form.append(aviso);
+  const guardar = document.createElement("button"); guardar.textContent = "Guardar cambios"; guardar.type = "submit"; guardar.className = "guardarEdicion";
+  const cancelar = document.createElement("button"); cancelar.type = "button"; cancelar.className = "secundario"; cancelar.textContent = "Cancelar edición"; cancelar.onclick = cerrarEdicion; form.append(guardar,cancelar); tarjeta.append(form);
+  form.onsubmit = async e => {
+    e.preventDefault(); if(editandoGuardado) return;
+    const valores = inputs.map(i=>i.value.trim());
+    if(!valores[0] || !valores[1] || !valores[4] || (!valores[2] && !valores[3])) {aviso.textContent="Completá nombre, apellido, producto y al menos un contacto.";return;}
+    if(valores[2] && (!/^\+?[\d\s().-]+$/.test(valores[2]) || !/^\d{8,15}$/.test(normalizarTelefono(valores[2])))) {aviso.textContent="Ingresá un teléfono válido de 8 a 15 dígitos.";return;}
+    actualizarConexion(); if(!tokenGoogle || !form.isConnected) return;
+    const token = tokenGoogle, id = String(fila[0] ?? "");
+    if(!id.trim()) {aviso.textContent="El registro no tiene ID. No se puede editar con seguridad.";return;}
+    editandoGuardado = true; const controles = [...form.querySelectorAll("input,textarea,button"), ...["navNuevo","navHistorial","actualizarHistorial","buscarHistorial","limpiarBusqueda","masHistorial"].map($)]; controles.forEach(c=>c.disabled=true);
+    const base = "https://sheets.googleapis.com/v4/spreadsheets/"+encodeURIComponent(GOOGLE_SHEET_ID)+"/values/";
+    const headers = {Authorization:"Bearer "+token,"Content-Type":"application/json"};
+    async function consultar(rango, opciones={}) {
+      const r = await fetch(base+encodeURIComponent(rango)+(opciones.method ? "?valueInputOption=RAW" : ""),{headers,cache:"no-store",...opciones});
+      if(r.status===401){tokenGoogle=null;venceToken=0;conexionVencida=true;actualizarConexion();throw new Error("Autorización vencida. Reconectá Google.");}
+      if(!r.ok) throw new Error("Google Sheets respondió HTTP "+r.status); return r.json();
+    }
+    function verificar(filas) {
+      const indices = filas.map((f,i)=>String(f[0]??"")===id?i:-1).filter(i=>i>=0);
+      if(indices.length!==1) throw new Error("ID inexistente o repetido. Actualizá el historial.");
+      const i=indices[0]; if(firmaFila(filas[i])!==firmaFila(fila)) throw new Error("El registro cambió desde otra consulta. Actualizá el historial antes de editar."); return i;
+    }
+    try {
+      aviso.textContent="Verificando registro y duplicados…";
+      let filas=(await consultar("Clientes!A2:I")).values||[]; verificar(filas);
+      const duplicados = fs=>fs.filter(f=>String(f[0]??"")!==id && ((normalizarTelefono(valores[2]) && normalizarTelefono(f[4])===normalizarTelefono(valores[2])) || (normalizarCorreo(valores[3]) && normalizarCorreo(f[5])===normalizarCorreo(valores[3]))));
+      const coincidencias=duplicados(filas);
+      if(coincidencias.length && !window.confirm("Existe otro registro con el mismo teléfono o correo. ¿Guardar igualmente?")) {aviso.textContent="Guardado cancelado por posible duplicado.";return;}
+      filas=(await consultar("Clientes!A2:I")).values||[]; const i=verificar(filas);
+      if(JSON.stringify(duplicados(filas))!==JSON.stringify(coincidencias)) throw new Error("Las coincidencias cambiaron. Volvé a intentar.");
+      if(token!==tokenGoogle || !form.isConnected || Date.now()>=venceToken) throw new Error("La sesión cambió. Reconectá Google.");
+      await consultar(`Clientes!C${i+2}:H${i+2}`,{method:"PUT",body:JSON.stringify({majorDimension:"ROWS",values:[valores]})});
+      const busqueda=$("buscarHistorial").value; await cargarHistorial();
+      if(token===tokenGoogle && !$("panelBusqueda").hidden) {$("buscarHistorial").value=busqueda;renderHistorial();$("estadoHistorial").textContent="Cambios guardados correctamente.";}
+    } catch(error) {const mensaje="No se pudo confirmar la edición: "+error.message+". Actualizá el historial antes de reintentar."; aviso.textContent=mensaje;$("estadoHistorial").textContent=mensaje;}
+    finally {editandoGuardado=false;controles.forEach(c=>c.disabled=false);}
+  };
+  inputs[0].focus();
+}
+
 let filasHistorial = [], limiteHistorial = 20, solicitudHistorial = 0;
 let vistaHistorial = false;
 function limpiarHistorial() {
+  cerrarEdicion();
   solicitudHistorial++;
   filasHistorial = [];
   $("panelBusqueda").hidden = true;
@@ -743,7 +802,7 @@ function sincronizarHistorial() {
   $("conectarHistorial").disabled = conectando || guardando;
 }
 function mostrarVista(ver) {
-  if (guardando || conectando || presionado || activo) return;
+  if (guardando || conectando || presionado || activo || editandoGuardado) return;
   vistaHistorial = ver;
   document.querySelectorAll(".contenedor > .tarjeta:not(#historial)").forEach(el => el.hidden = ver);
   historial.hidden = !ver;
@@ -766,6 +825,7 @@ function coincideBusqueda(fila, consulta) {
     (/^\d+$/.test(palabra) && telefono.includes(palabra)));
 }
 function renderHistorial() {
+  cerrarEdicion();
   const lista = $("listaHistorial");
   lista.replaceChildren();
   const consulta = $("buscarHistorial").value.trim();
@@ -795,7 +855,10 @@ function renderHistorial() {
       const dt = document.createElement("dt"), dd = document.createElement("dd");
       dt.textContent = etiqueta; dd.textContent = fila[i] || "—"; detalle.append(dt,dd);
     });
-    tarjeta.append(detalle); lista.append(tarjeta);
+    tarjeta.append(detalle);
+    const editar = document.createElement("button"); editar.type = "button"; editar.className = "secundario"; editar.textContent = "Editar registro";
+    editar.addEventListener("click", () => abrirEdicion(fila, tarjeta));
+    tarjeta.append(editar); lista.append(tarjeta);
   }
   $("masHistorial").hidden = visibles.length >= filtradas.length;
 }

@@ -127,3 +127,8 @@ button:disabled {opacity:.55;cursor:not-allowed}button:focus-visible,input:focus
 .filaBusqueda {display:flex;align-items:center;gap:8px}
 .filaBusqueda input {flex:1;min-width:0}
 .filaBusqueda button {width:auto;margin:0;padding:12px;font-size:14px}
+
+.editorRegistro {border-top:1px solid var(--line);margin-top:16px;padding-top:16px}
+.editorRegistro input,.editorRegistro textarea {display:block;margin-top:6px}
+.guardarEdicion {background:linear-gradient(125deg,#213d86,#4665bf);color:white}
+.avisoEdicion {background:#fff7e0;color:#92400e;border:1px solid #e7c46a;border-radius:10px;padding:12px;overflow-wrap:anywhere}
