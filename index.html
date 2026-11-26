@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ALIADO’S | Registro Comercial</title>
-<link rel="stylesheet" href="estilos.css?v=3.3">
+<link rel="stylesheet" href="estilos.css?v=3.4">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#050e32">
 <script>try {document.documentElement.dataset.tema=localStorage.getItem("aliados-tema")==="oscuro"?"oscuro":"claro";} catch(e) {}</script>
@@ -16,13 +16,18 @@
     <div class="marca"><img src="logo-aliados.png" alt="ALIADO’S — Simplificamos tu negocio"><button id="tema" type="button" aria-pressed="false">Modo oscuro</button></div>
     <h1>Registro Comercial</h1>
     <p>Registro inteligente de clientes por voz</p>
-    <small>Versión 3.3 · Registro por voz</small>
+    <small>Versión 3.4 · Gestión comercial</small>
   </div>
 
   <nav class="navHistorial" aria-label="Secciones">
     <button id="navNuevo" type="button" aria-pressed="true">Nuevo registro</button>
     <button id="navHistorial" type="button" aria-pressed="false">Historial</button>
+  <button id="navSeguimiento" type="button" aria-pressed="false">Seguimiento</button>
   </nav>
+  <section id="seguimiento" class="tarjeta" hidden>
+  <h3>Seguimiento comercial</h3><button id="conectarSeg" class="secundario">Conectar con Google</button><button id="actualizarSeg" class="secundario">Actualizar seguimiento</button><p id="estadoSeg" role="status"></p>
+  <div id="contenidoSeg" hidden><div id="indicadoresSeg" class="indicadoresSeg"></div><h3>Embudo comercial</h3><div id="embudoSeg"></div><h3>Próximos contactos</h3><div id="agendaSeg"></div><label for="filtroEstado">Estado</label><select id="filtroEstado"></select><label for="filtroPrioridad">Prioridad</label><select id="filtroPrioridad"></select><label for="buscarSeg">Buscar oportunidad</label><input id="buscarSeg" type="search"><div id="listaSeg"></div></div>
+  </section>
   <section id="historial" class="tarjeta" hidden>
     <h3>Historial de clientes</h3>
     <button id="conectarHistorial" class="secundario" type="button">Conectar con Google</button>
@@ -377,6 +382,7 @@ function actualizarConexion() {
     conexionVencida ? "Reconectar con Google" : "Conectar con Google";
   $("desconectarGoogle").hidden = !conectado;
   $("desconectarGoogle").disabled = guardando || conectando;
+  if (document.getElementById("seguimiento").dataset.listo) sincronizarSeg();
   if (typeof sincronizarHistorial === "function" && $("historial").dataset.listo) sincronizarHistorial();
 }
 
@@ -602,10 +608,10 @@ async function guardarClienteGoogle() {
     datos.email,
     datos.producto,
     datos.observaciones,
-    "Nuevo"
+    "Nuevo", "Media", "", "", fecha
   ];
 
-  const rango = encodeURIComponent("Clientes!A:I");
+  const rango = encodeURIComponent("Clientes!A:M");
   const url =
     "https://sheets.googleapis.com/v4/spreadsheets/" +
     encodeURIComponent(GOOGLE_SHEET_ID) +
@@ -749,7 +755,7 @@ function abrirEdicion(fila, tarjeta) {
     actualizarConexion(); if(!tokenGoogle || !form.isConnected) return;
     const token = tokenGoogle, id = String(fila[0] ?? "");
     if(!id.trim()) {aviso.textContent="El registro no tiene ID. No se puede editar con seguridad.";return;}
-    editandoGuardado = true; const controles = [...form.querySelectorAll("input,textarea,button"), ...["navNuevo","navHistorial","actualizarHistorial","buscarHistorial","limpiarBusqueda","masHistorial"].map($)]; controles.forEach(c=>c.disabled=true);
+    editandoGuardado = true; const controles = [...form.querySelectorAll("input,textarea,button"), ...["navNuevo","navHistorial","navSeguimiento","actualizarHistorial","buscarHistorial","limpiarBusqueda","masHistorial"].map($)]; controles.forEach(c=>c.disabled=true);
     const base = "https://sheets.googleapis.com/v4/spreadsheets/"+encodeURIComponent(GOOGLE_SHEET_ID)+"/values/";
     const headers = {Authorization:"Bearer "+token,"Content-Type":"application/json"};
     async function consultar(rango, opciones={}) {
@@ -802,9 +808,10 @@ function sincronizarHistorial() {
   $("conectarHistorial").disabled = conectando || guardando;
 }
 function mostrarVista(ver) {
-  if (guardando || conectando || presionado || activo || editandoGuardado) return;
+  if (guardando || conectando || presionado || activo || editandoGuardado || guardandoSeg) return;
+  cerrarSeg();
   vistaHistorial = ver;
-  document.querySelectorAll(".contenedor > .tarjeta:not(#historial)").forEach(el => el.hidden = ver);
+  document.querySelectorAll(".contenedor > .tarjeta:not(#historial):not(#seguimiento)").forEach(el => el.hidden = ver);
   historial.hidden = !ver;
   $("navNuevo").setAttribute("aria-pressed", String(!ver));
   $("navHistorial").setAttribute("aria-pressed", String(ver));
@@ -917,6 +924,28 @@ $("conectarHistorial").addEventListener("click", async () => {
 sincronizarHistorial();
 
 $("historial").dataset.listo = "1";
+const estadosSeg=["Nuevo","Contactado","Presupuesto en preparación","Presupuesto enviado","En negociación","Venta concretada","Venta perdida"], prioridadesSeg=["Baja","Media","Alta"];
+const coloresSeg=["#647bb8","#0284c7","#b45309","#7c3aed","#0891b2","#15803d","#b91c1c"];
+let vistaSeg=false, guardandoSeg=false, secSeg=0, clientesSeg=[], eventosSeg=[], idsHojas=null;
+const estadoFila=f=>f[8]||"Nuevo", prioridadFila=f=>f[9]||"Media", activa=f=>!estadosSeg.slice(-2).includes(estadoFila(f));
+const hoySeg=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const fechaSeg=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+const firmaSeg=f=>JSON.stringify(Array.from({length:13},(_,i)=>String(f[i]??'')));
+function nodoSeg(tag,texto,clase){const e=document.createElement(tag);e.textContent=texto;if(clase)e.className=clase;return e;}
+function opcionesSeg(el,vals,todas=false){el.replaceChildren();if(todas)el.add(new Option('Todos',''));vals.forEach(v=>el.add(new Option(v,v)));}
+opcionesSeg($('filtroEstado'),estadosSeg,true);opcionesSeg($('filtroPrioridad'),prioridadesSeg,true);
+function limpiarSeg(){secSeg++;clientesSeg=[];eventosSeg=[];idsHojas=null;$('contenidoSeg').hidden=true;for(const id of ['listaSeg','agendaSeg','embudoSeg','indicadoresSeg'])$(id).replaceChildren();}
+function cerrarSeg(){vistaSeg=false;limpiarSeg();$('seguimiento').hidden=true;$('navSeguimiento').setAttribute('aria-pressed','false');}
+function sincronizarSeg(){if(!tokenGoogle){limpiarSeg();$('estadoSeg').textContent='Conectá Google para consultar el seguimiento.';}$('conectarSeg').hidden=!!tokenGoogle;$('conectarSeg').disabled=conectando||guardandoSeg;$('actualizarSeg').disabled=!tokenGoogle||guardandoSeg;}
+async function apiSeg(token,ruta='',op={}){const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(GOOGLE_SHEET_ID)+ruta,{cache:'no-store',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...op});if(r.status===401&&token===tokenGoogle){tokenGoogle=null;venceToken=0;conexionVencida=true;actualizarConexion();}if(!r.ok)throw Error('Google Sheets HTTP '+r.status);return r.json();}
+const leerSeg=(t,r)=>apiSeg(t,'/values/'+encodeURIComponent(r));
+async function cargarSeg(){actualizarConexion();limpiarSeg();if(!tokenGoogle||!vistaSeg)return;const t=tokenGoogle,n=secSeg;$('estadoSeg').textContent='Cargando seguimiento…';try{const [c,e,m]=await Promise.all([leerSeg(t,'Clientes!A2:M'),leerSeg(t,'Seguimientos!A2:H'),apiSeg(t,'?fields=sheets(properties(sheetId,title) )'.replace(/ /g,''))]);if(n!==secSeg||t!==tokenGoogle||!vistaSeg)return;clientesSeg=(c.values||[]).filter(f=>f.some(v=>String(v).trim()));eventosSeg=e.values||[];idsHojas=Object.fromEntries(m.sheets.map(x=>[x.properties.title,x.properties.sheetId]));if(!Object.hasOwn(idsHojas,'Clientes')||!Object.hasOwn(idsHojas,'Seguimientos'))throw Error('Faltan pestañas');$('contenidoSeg').hidden=false;renderSeg();$('estadoSeg').textContent='Seguimiento actualizado.';}catch(e){if(n===secSeg)$('estadoSeg').textContent=e.message;}}
+function renderSeg(){if(guardandoSeg||!tokenGoogle)return;const hoy=hoySeg(), activos=clientesSeg.filter(activa), pendientes=activos.filter(f=>f[11]);const k=$('indicadoresSeg');k.replaceChildren();for(const [nombre,num] of [['Oportunidades activas',activos.length],['Contactos para hoy',pendientes.filter(f=>f[11]===hoy).length],['Contactos vencidos',pendientes.filter(f=>f[11]<hoy).length],['Ventas concretadas',clientesSeg.filter(f=>estadoFila(f)==='Venta concretada').length]]){const b=nodoSeg('div','','indicadorSeg');b.append(nodoSeg('strong',num),nodoSeg('span',nombre));k.append(b);}const emb=$('embudoSeg');emb.replaceChildren();estadosSeg.forEach((e,i)=>{const n=clientesSeg.filter(f=>estadoFila(f)===e).length;const b=nodoSeg('div',e+' · '+n);const bar=nodoSeg('div','','barraSeg');bar.style.width=(100*n/Math.max(1,clientesSeg.length))+'%';bar.style.background=coloresSeg[i];b.append(bar);emb.append(b);});const ag=$('agendaSeg');ag.replaceChildren();pendientes.sort((a,b)=>String(a[11]).localeCompare(String(b[11]))).forEach(f=>{const b=nodoSeg('button',[f[2],f[3]].join(' ')+' · '+f[11]+(f[11]<hoy?' · Vencido':f[11]===hoy?' · Hoy':''),'secundario');b.onclick=()=>{ $('filtroEstado').value='';$('filtroPrioridad').value='';$('buscarSeg').value='';renderSeg();const el=[...$('listaSeg').children].find(x=>x.dataset.id===String(f[0]));if(el){el.open=true;el.scrollIntoView({block:'nearest'});}};ag.append(b);});if(!pendientes.length)ag.append(nodoSeg('p','Sin contactos programados.','nota'));
+const lista=$('listaSeg');lista.replaceChildren();const fs=clientesSeg.filter(f=>(!$('filtroEstado').value||estadoFila(f)===$('filtroEstado').value)&&(!$('filtroPrioridad').value||prioridadFila(f)===$('filtroPrioridad').value)&&coincideBusqueda(f,$('buscarSeg').value));fs.forEach(f=>{const d=nodoSeg('details','','registroHistorial');d.dataset.id=String(f[0]);d.append(nodoSeg('summary',[f[2],f[3]].join(' ')+' · '+estadoFila(f)+' · '+prioridadFila(f)));d.append(nodoSeg('p',f[6]||'—'));const tel=normalizarTelefono(f[4]);const links=nodoSeg('div','','contactosSeg');function link(text,url){const a=nodoSeg('a',text);a.href=url;links.append(a);}if(tel){link('Llamar','tel:+'+tel);if(String(f[4]).trim().startsWith('+'))link('WhatsApp','https://wa.me/'+tel);else links.append(nodoSeg('span','WhatsApp: requiere teléfono con +código de país.','nota'));}if(f[5])link('Correo','mailto:'+encodeURIComponent(f[5]));d.append(links);const form=nodoSeg('form','');const est=document.createElement('select'),pri=document.createElement('select'),fecha=document.createElement('input'),nota=document.createElement('textarea'),contacto=document.createElement('input');opcionesSeg(est,[...new Set([...estadosSeg,estadoFila(f)])]);est.value=estadoFila(f);opcionesSeg(pri,prioridadesSeg);pri.value=prioridadFila(f);fecha.type='date';fecha.value=f[11]||'';contacto.type='checkbox';for(const [label,el] of [['Estado comercial',est],['Prioridad',pri],['Próximo contacto',fecha],['Nueva nota comercial',nota],['Registrar contacto realizado hoy',contacto]]){const l=nodoSeg('label',label);l.append(el);form.append(l);}const b=nodoSeg('button','Guardar seguimiento','guardarEdicion');b.type='submit';form.append(b);const msg=nodoSeg('p','','nota');msg.setAttribute('role','status');form.append(msg);form.onsubmit=e=>{e.preventDefault();guardarSeguimiento(f,est.value,pri.value,fecha.value,nota.value.trim(),contacto.checked,msg);};d.append(form,nodoSeg('h3','Historial de actividad'));eventosSeg.filter(e=>String(e[1])===String(f[0])).slice().reverse().forEach(e=>d.append(nodoSeg('p',[e[2],e[3]+' → '+e[4],e[5],e[6],e[7]].filter(Boolean).join(' · '),'actividadSeg')));lista.append(d);});if(!fs.length)lista.append(nodoSeg('p','Sin coincidencias.','nota'));}
+async function guardarSeguimiento(f,estado,prioridad,fecha,nota,contacto,msg){if(guardandoSeg)return;actualizarConexion();if(!tokenGoogle||!vistaSeg||!idsHojas)return;const t=tokenGoogle,id=String(f[0]||''),hojas=idsHojas;if(!id){msg.textContent='Registro sin ID.';return;}if(!nota&&!contacto&&estado===estadoFila(f)&&prioridad===prioridadFila(f)&&fecha===(f[11]||'')){msg.textContent='No hay cambios.';return;}guardandoSeg=true;const controles=[...$('seguimiento').querySelectorAll('button,input,select,textarea'),$('navNuevo'),$('navHistorial'),$('navSeguimiento')];controles.forEach(x=>x.disabled=true);msg.textContent='Verificando y guardando…';try{const filas=(await leerSeg(t,'Clientes!A2:M')).values||[];const indices=filas.map((r,i)=>String(r[0])===id?i:-1).filter(i=>i>=0);if(indices.length!==1||firmaSeg(filas[indices[0]])!==firmaSeg(f))throw Error('Registro cambiado o ID no único. Actualizá el seguimiento.');if(t!==tokenGoogle||Date.now()>=venceToken||!vistaSeg)throw Error('Sesión vencida');const ahora=fechaSeg(), vals=[estado,prioridad,contacto?ahora:(f[10]||''),fecha,ahora], evento=[crypto.randomUUID(),id,ahora,estadoFila(f),estado,nota,prioridad,fecha];const cells=vs=>({values:vs.map(v=>({userEnteredValue:{stringValue:String(v)}}))});await apiSeg(t,':batchUpdate',{method:'POST',body:JSON.stringify({requests:[{updateCells:{start:{sheetId:hojas.Clientes,rowIndex:indices[0]+1,columnIndex:8},rows:[cells(vals)],fields:'userEnteredValue'}},{appendCells:{sheetId:hojas.Seguimientos,rows:[cells(evento)],fields:'userEnteredValue'}}]})});guardandoSeg=false;await cargarSeg();if(t===tokenGoogle&&!$('contenidoSeg').hidden)$('estadoSeg').textContent='Seguimiento guardado correctamente.';}catch(e){msg.textContent='No se pudo confirmar: '+e.message+'. Actualizá antes de reintentar.';$('estadoSeg').textContent=msg.textContent;}finally{guardandoSeg=false;controles.forEach(x=>x.disabled=false);sincronizarSeg();}}
+$('navSeguimiento').onclick=()=>{if(guardando||conectando||presionado||activo||editandoGuardado||guardandoSeg)return;vistaHistorial=false;limpiarHistorial();vistaSeg=true;document.querySelectorAll('.contenedor > .tarjeta').forEach(e=>e.hidden=e.id!=='seguimiento');$('navNuevo').setAttribute('aria-pressed','false');$('navHistorial').setAttribute('aria-pressed','false');$('navSeguimiento').setAttribute('aria-pressed','true');cargarSeg();};
+$('actualizarSeg').onclick=cargarSeg;$('conectarSeg').onclick=async()=>{if(conectando||guardandoSeg)return;conectando=true;actualizarConexion();try{await solicitarAcceso();await cargarSeg();}catch(e){$('estadoSeg').textContent=e.message;}finally{conectando=false;actualizarConexion();}};for(const id of ['filtroEstado','filtroPrioridad','buscarSeg'])$(id).addEventListener('input',renderSeg);$('seguimiento').dataset.listo='1';sincronizarSeg();
+
 </script>
 <footer class="pie">ALIADO’S · Simplificamos tu negocio</footer>
 </body>
